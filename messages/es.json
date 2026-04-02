@@ -1,4 +1,12 @@
 {
+  "Director": {
+    "registrationForm": {
+      "modules": "Pasos de Registro",
+      "module": "Paso {index}",
+      "activePrompts": "{count} pregunta(s) en esta sección",
+      "clubTitle": "Información del Club"
+    }
+  },
   "Navigation": {
     "dashboard": "Panel",
     "roster": "Nómina",
