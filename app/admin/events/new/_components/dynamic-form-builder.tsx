@@ -20,6 +20,7 @@ export type DynamicFieldDraft = {
   type: SupportedFormFieldType;
   isRequired: boolean;
   optionsJson: string;
+  scope: "GLOBAL" | "ATTENDEE";
 };
 
 type DynamicFormBuilderProps = {
@@ -39,6 +40,7 @@ function createEmptyField(parentFieldId: string | null = null, type: SupportedFo
     type,
     isRequired: false,
     optionsJson: "[]",
+    scope: "GLOBAL",
   };
 }
 
@@ -226,6 +228,22 @@ export function DynamicFormBuilder({ fields, onChange }: DynamicFormBuilderProps
             Required
           </label>
         </div>
+
+        {!isGroup ? (
+          <label className="block space-y-1 text-sm text-slate-700">
+            <span>Answer Scope</span>
+            <select
+              value={field.scope}
+              onChange={(event) =>
+                updateField(field.id, { scope: event.currentTarget.value as "GLOBAL" | "ATTENDEE" })
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            >
+              <option value="GLOBAL">Club-level (one answer for whole club)</option>
+              <option value="ATTENDEE">Per-person (separate answer per attendee)</option>
+            </select>
+          </label>
+        ) : null}
 
         {typeAllowsOptions(field.type) ? (
           <div className="space-y-2">

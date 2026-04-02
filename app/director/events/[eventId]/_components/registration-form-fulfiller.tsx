@@ -42,6 +42,75 @@ type RegistrationFormFulfillerProps = {
 
 type GlobalResponseMap = Record<string, unknown>;
 
+const SDA_TERM_DEFINITIONS: Record<string, string> = {
+  TLT: "Teen Leadership Training – a leadership development program for older Pathfinders.",
+  Investiture: "An annual ceremony where members receive recognition for completing class requirements.",
+  Honors: "Achievement awards recognizing mastery of specific skills or knowledge areas.",
+  Pathfinder: "A club program for youth ages 10–15 in the Seventh-day Adventist Church.",
+  Adventurer: "A club program for children ages 4–9 in the Seventh-day Adventist Church.",
+  "Master Guide": "A leadership certification for adult Pathfinder club staff.",
+};
+
+function SdaTermTooltip({ term }: { term: string }) {
+  const [visible, setVisible] = useState(false);
+  const definition = SDA_TERM_DEFINITIONS[term];
+  if (!definition) return null;
+
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-500 hover:bg-indigo-100 hover:text-indigo-700"
+        aria-label={`What is ${term}?`}
+      >
+        ?
+      </button>
+      {visible && (
+        <span
+          role="tooltip"
+          className="absolute bottom-full left-1/2 z-20 mb-1 w-56 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg"
+        >
+          <strong className="block text-slate-900">{term}</strong>
+          {definition}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const SDA_TERM_PATTERN = /\b(Master Guide|TLT|Investiture|Honors|Pathfinder|Adventurer)\b/g;
+
+function annotateWithSdaTooltips(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  SDA_TERM_PATTERN.lastIndex = 0;
+
+  while ((match = SDA_TERM_PATTERN.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const term = match[0];
+    parts.push(
+      <span key={match.index} className="inline-flex items-baseline">
+        {term}
+        <SdaTermTooltip term={term} />
+      </span>,
+    );
+    lastIndex = match.index + term.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? <>{parts}</> : text;
+}
+
 function attendeeName(attendee: Attendee) {
   return `${attendee.firstName} ${attendee.lastName}`;
 }
@@ -93,6 +162,19 @@ export function RegistrationFormFulfiller({
       standaloneFields,
     };
   }, [dynamicFields]);
+
+  const progressPercent = useMemo(() => {
+    const requiredFields = dynamicFields.filter((f) => f.type !== "FIELD_GROUP" && f.isRequired);
+    const total = 1 + requiredFields.length; // 1 for attendee selection step
+    let done = selectedAttendeeIds.length > 0 ? 1 : 0;
+    for (const field of requiredFields) {
+      const value = globalResponses[field.id];
+      const isEmpty =
+        value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+      if (!isEmpty) done++;
+    }
+    return Math.round((done / total) * 100);
+  }, [dynamicFields, globalResponses, selectedAttendeeIds]);
 
   const payload = useMemo(() => {
     const responses: Array<{ fieldId: string; attendeeId: string | null; value: unknown }> = [];
@@ -301,10 +383,12 @@ export function RegistrationFormFulfiller({
       <div key={field.id} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div>
           <p className="text-sm font-semibold text-slate-900">
-            {field.label}
+            {annotateWithSdaTooltips(field.label)}
             {field.isRequired ? <span className="ml-1 text-rose-600">*</span> : null}
           </p>
-          {field.description ? <p className="text-xs text-slate-500">{field.description}</p> : null}
+          {field.description ? (
+            <p className="text-xs text-slate-500">{annotateWithSdaTooltips(field.description)}</p>
+          ) : null}
         </div>
         {renderFieldInput(field)}
       </div>
@@ -315,6 +399,20 @@ export function RegistrationFormFulfiller({
     <form className="space-y-6">
       <input type="hidden" name="eventId" value={eventId} readOnly />
       <input type="hidden" name="registrationPayload" value={payload} readOnly />
+
+      {/* Progress bar — above the sections grid */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span>Registration Progress</span>
+          <span>{progressPercent}% complete</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+          <div
+            className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
 
       <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">Attendee Checklist</h2>
@@ -350,8 +448,12 @@ export function RegistrationFormFulfiller({
           {groupedFields.groups.map((group) => (
             <section key={group.id} className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4">
               <div className="mb-3">
-                <h3 className="text-base font-semibold text-indigo-900">{group.label}</h3>
-                {group.description ? <p className="text-xs text-indigo-700">{group.description}</p> : null}
+                <h3 className="text-base font-semibold text-indigo-900">
+                  {annotateWithSdaTooltips(group.label)}
+                </h3>
+                {group.description ? (
+                  <p className="text-xs text-indigo-700">{annotateWithSdaTooltips(group.description)}</p>
+                ) : null}
               </div>
               <div className="space-y-3">
                 {group.children.length > 0 ? (
@@ -371,18 +473,18 @@ export function RegistrationFormFulfiller({
         <p className="text-xs text-slate-500">
           Current status: <span className="font-semibold text-slate-700">{registrationStatus ?? "Not started"}</span>
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <button
             formAction={saveEventRegistrationDraft}
             type="submit"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto"
           >
             Save Draft
           </button>
           <button
             formAction={submitEventRegistration}
             type="submit"
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 sm:w-auto"
           >
             Submit Registration
           </button>
